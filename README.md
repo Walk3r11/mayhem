@@ -22,7 +22,7 @@ Inspired by classic PC architecture, this project pieces together several microc
 - **CPU-like control and coordination** across multiple microcontrollers
 - **Dynamic thermal management** using onboard temperature sensors (Raspberry Pi Pico’s internal sensor) to control cooling fans
 - **LED arrays** as system status indicators, boot-up animations, and diagnostics (ESP32 and Arduino controlling multiple LEDs with flicker and sequence effects)
-- **Parallel and serial shift registers** (SN74HC165 & SN74HC595) for efficient expansion of digital inputs/outputs, emulating real CPU buses and registers
+- **Parallel and serial shift registers** (SN74HC165 & SN74HC595N) for efficient expansion of digital inputs/outputs, emulating real CPU buses and registers
 - **Mass storage integration** with a microSD card module for data logging or system state saving
 - **Visual feedback** through a 2.8” SPI TFT display showing system status and debug info
 - **User inputs** via DIP switches and buttons for configuration and control signals
