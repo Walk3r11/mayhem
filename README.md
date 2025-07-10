@@ -1,9 +1,4 @@
-# mayhem
-
-<p align="center">
-  <img src="https://via.placeholder.com/600x150?text=mayhem+DIY+Multi-Microcontroller+PC" alt="Project Banner"/>
-</p>
-
+# MAYHEM
 <p align="center">
   <b>DIY Multi-Microcontroller PC Prototype — A Custom “CPU” System with Thermal & I/O Control</b>
 </p>
