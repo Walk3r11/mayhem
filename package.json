@@ -1,0 +1,21 @@
+{
+  "name": "mayhem",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">   <b>DIY Multi-Microcontroller PC Prototype — A Custom “CPU” System with Thermal & I/O Control</b> </p>",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Walk3r11/mayhem.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Walk3r11/mayhem/issues"
+  },
+  "homepage": "https://github.com/Walk3r11/mayhem#readme"
+}
