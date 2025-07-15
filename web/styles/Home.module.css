@@ -714,3 +714,56 @@
   color: #00cfff;
   transition: background 0.2s, color 0.2s;
 }
+
+.schematicBtnAnimated {
+  font-size: 1.2em;
+  padding: 0.7em 2em;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #0e2233 60%, #00cfff33 100%);
+  color: #fff;
+  border: 2.5px solid #00cfff;
+  cursor: pointer;
+  box-shadow: 0 0 16px #00cfff55, 0 2px 12px #00cfff33;
+  transition: transform 0.18s cubic-bezier(.4, 2, .6, 1), box-shadow 0.18s, border-color 0.18s, background 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+
+.schematicBtnAnimated::before {
+  content: '';
+  position: absolute;
+  left: -50%;
+  top: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, #00cfff44 0%, transparent 70%);
+  animation: schematicBtnPulse 2.5s infinite linear;
+  z-index: 0;
+}
+
+.schematicBtnAnimated:hover {
+  transform: scale(1.07);
+  border-color: #fff;
+  background: linear-gradient(120deg, #00cfff 60%, #0e2233 100%);
+  box-shadow: 0 0 32px #00cfff99, 0 2px 24px #00cfff33;
+}
+
+.schematicBtnAnimated span,
+.schematicBtnAnimated {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes schematicBtnPulse {
+  0% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 0.2;
+  }
+
+  100% {
+    opacity: 0.7;
+  }
+}
