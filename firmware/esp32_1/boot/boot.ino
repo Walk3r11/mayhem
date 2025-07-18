@@ -1,5 +1,5 @@
-#define GREEN_LED 12
-#define RED_LED 14
+#define GREEN_LED 13
+#define RED_LED 12
 
 void setup() {
   pinMode(GREEN_LED, OUTPUT);
@@ -10,5 +10,5 @@ void setup() {
 }
 
 void loop() {
-  
+ 
 }
