@@ -53,10 +53,31 @@
   width: 100%;
   font-family: 'Orbitron', 'Segoe UI', 'Arial', sans-serif;
   position: relative;
-  animation: menuFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: flashCardIn 0.85s cubic-bezier(.22, 1.2, .36, 1);
   backdrop-filter: blur(12px) saturate(1.2);
   -webkit-backdrop-filter: blur(12px) saturate(1.2);
   overflow: hidden;
+  transition: box-shadow 0.32s cubic-bezier(.22, 1.2, .36, 1), transform 0.32s cubic-bezier(.22, 1.2, .36, 1), border-radius 0.32s cubic-bezier(.22, 1.2, .36, 1);
+}
+
+@keyframes flashCardIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) rotateY(-18deg);
+    box-shadow: 0 0 0 0 #00cfff00;
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.04) rotateY(2deg);
+    box-shadow: 0 0 64px 24px #00cfffcc, 0 0 0 6px #00cfff99 inset;
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotateY(0deg);
+    box-shadow: 0 0 32px 4px #00cfff55, 0 2px 32px #000a, 0 0 0 1.5px #fff2 inset;
+  }
 }
 
 .glassPanel::before {
@@ -329,18 +350,38 @@
 }
 
 .dsList {
-  margin: 0 0 0 1.2em;
+  display: block;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
   padding: 0;
-  list-style: disc;
+  margin: 0;
+  list-style: none;
   font-size: 1.08rem;
   color: #e0f7fa;
   z-index: 3;
 }
 
 .dsListItem {
-  margin-bottom: 0.7em;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
+  background: linear-gradient(120deg, rgba(20, 40, 80, 0.55) 60%, rgba(0, 255, 255, 0.10) 100%);
+  border: 1.5px solid #00cfff33;
+  border-radius: 18px;
+  box-shadow: 0 2px 12px 0 #00cfff22;
+  padding: 1.1em 1.6em;
+  margin: 0 0 1.1em 0;
+  font-weight: 600;
+  color: #e0f7fa;
+  display: block;
+  transition: box-shadow 0.18s, border 0.18s, background 0.18s, color 0.18s, transform 0.18s;
+  cursor: default;
+}
+
+.dsListItem:hover {
+  background: linear-gradient(120deg, #00cfff33 60%, #00ffb733 100%);
+  border: 1.5px solid #00cfff;
+  color: #00cfff;
+  box-shadow: 0 6px 24px 0 #00cfff55;
+  transform: translateY(-2px) scale(1.025);
 }
 
 .dsBgWrap {
@@ -355,9 +396,9 @@
 .sidebar {
   width: 220px;
   min-width: 180px;
-  background: linear-gradient(120deg, rgba(20, 40, 80, 0.7) 60%, rgba(0, 255, 255, 0.10) 100%);
-  border-right: 2.5px solid #00cfff88;
-  box-shadow: 0 0 32px 4px #00cfff33, 0 2px 32px #000a;
+  background: linear-gradient(120deg, rgba(20, 40, 80, 0.38) 60%, rgba(0, 255, 255, 0.08) 100%);
+  border-right: 2.5px solid #00cfff44;
+  box-shadow: 0 0 32px 4px #00cfff22, 0 2px 32px #0004;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -385,11 +426,12 @@
 }
 
 .navBtn {
-  background: none;
-  border: none;
+  background: linear-gradient(120deg, rgba(20, 40, 80, 0.22) 60%, rgba(0, 255, 255, 0.08) 100%);
+  border: 2px solid rgba(0, 207, 255, 0.32);
   color: #e0f7fa;
   font-family: 'Orbitron', 'Segoe UI', 'Arial', sans-serif;
   font-size: 1.1rem;
+  font-weight: 700;
   letter-spacing: 0.18em;
   padding: 0.7em 1.2em;
   margin-left: 0.5em;
@@ -398,23 +440,67 @@
   align-items: center;
   gap: 0.7em;
   cursor: pointer;
-  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s, transform 0.32s cubic-bezier(.22, 1.2, .36, 1), border 0.18s, border-radius 0.32s cubic-bezier(.22, 1.2, .36, 1);
   position: relative;
   outline: none;
   box-shadow: 0 0 0 0 #00cfff00;
+  overflow: hidden;
+  text-shadow: 0 2px 8px #00cfff55, 0 0 2px #000a;
+}
+
+.navBtn::after {
+  content: '';
+  position: absolute;
+  left: -60%;
+  top: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.01) 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s, left 0.5s cubic-bezier(.22, 1.2, .36, 1);
+  z-index: 2;
+}
+
+.navBtn:hover::after,
+.navBtn:focus::after {
+  left: 100%;
+  opacity: 1;
+  transition: opacity 0.3s, left 0.7s cubic-bezier(.22, 1.2, .36, 1);
 }
 
 .navBtn:hover,
 .navBtn:focus {
-  background: #00cfff22;
+  background: linear-gradient(120deg, rgba(0, 207, 255, 0.18) 60%, rgba(0, 255, 255, 0.12) 100%);
   color: #00cfff;
-  box-shadow: 0 0 16px #00cfffcc;
+  border: 2.5px solid #00cfff;
+  box-shadow: 0 0 32px 8px #00cfffcc, 0 2px 8px #00cfff88;
+  transform: scale(1.08) translateY(-2px);
+  border-radius: 18px;
+  z-index: 2;
 }
 
 .activeNav {
-  background: #00cfff33;
+  background: linear-gradient(120deg, rgba(0, 207, 255, 0.22) 60%, rgba(0, 255, 255, 0.14) 100%);
   color: #00cfff;
-  box-shadow: 0 0 24px #00cfffcc;
+  border: 2.5px solid #00cfff;
+  box-shadow: 0 0 48px 16px #00cfffcc, 0 0 0 3px #00cfff inset, 0 2px 8px #00cfff88;
+  animation: tabGlowPulse 1.6s infinite alternate cubic-bezier(.22, 1.2, .36, 1);
+  font-weight: 800;
+  text-shadow: 0 2px 12px #00cfff99, 0 0 2px #000a;
+  transform: scale(1.10) translateY(-3px);
+  border-radius: 18px;
+  transition: box-shadow 0.32s cubic-bezier(.22, 1.2, .36, 1), border-radius 0.32s cubic-bezier(.22, 1.2, .36, 1), transform 0.32s cubic-bezier(.22, 1.2, .36, 1);
+}
+
+@keyframes tabGlowPulse {
+  0% {
+    box-shadow: 0 0 32px 8px #00cfffcc, 0 0 0 2px #00cfff inset, 0 2px 8px #00cfff88;
+  }
+
+  100% {
+    box-shadow: 0 0 64px 24px #00cfffcc, 0 0 0 6px #00cfff99 inset, 0 2px 16px #00cfffcc;
+  }
 }
 
 .navDot {
@@ -477,17 +563,19 @@
 .panelActive {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0) scale(1) rotateZ(0deg);
+  transform: translateX(0) scale(1.04) translateY(-6px);
   z-index: 2;
-  box-shadow: 0 0 64px 16px #00cfffcc, 0 2px 32px #000a, 0 0 0 3.5px #00cfff inset, 0 0 32px 8px #00cfff99;
+  box-shadow: 0 0 64px 24px #00cfffcc, 0 0 0 6px #00cfff99 inset, 0 2px 16px #00cfffcc;
   animation: panelGlow 2.5s infinite alternate;
+  transition: opacity 0.5s cubic-bezier(.22, 1.2, .36, 1), transform 0.5s cubic-bezier(.22, 1.2, .36, 1), box-shadow 0.5s cubic-bezier(.22, 1.2, .36, 1);
 }
 
 .panelInactive {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(40px) scale(0.98) rotateZ(-2deg);
+  transform: translateX(-60px) scale(0.96) translateY(40px) rotateZ(-2deg);
   z-index: 1;
+  transition: opacity 0.5s cubic-bezier(.22, 1.2, .36, 1), transform 0.5s cubic-bezier(.22, 1.2, .36, 1), box-shadow 0.5s cubic-bezier(.22, 1.2, .36, 1);
 }
 
 .scanlineVfx {
@@ -766,4 +854,113 @@
   100% {
     opacity: 0.7;
   }
+}
+
+.glassPanel.horizontalCard {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 2.5em 3em 2.5em 0;
+  position: relative;
+  min-height: 180px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.glassPanel.horizontalCard::before {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  background: linear-gradient(180deg, #00cfff 0%, #00ffb7 100%);
+  border-radius: 16px 0 0 16px;
+  box-shadow: 2px 0 12px #00cfff88;
+  z-index: 2;
+}
+
+.glassPanel.horizontalCard>* {
+  margin-left: 2.2em;
+}
+
+.glassPanel.horizontalCard {
+  animation: cardAssemble 0.9s cubic-bezier(.22, 1.2, .36, 1);
+}
+
+.floatingPanel.panelInactive .glassPanel.horizontalCard {
+  animation: cardDisintegrate 0.7s cubic-bezier(.22, 1.2, .36, 1) forwards;
+}
+
+@keyframes cardAssemble {
+  0% {
+    opacity: 0;
+    filter: blur(16px);
+    transform: scale(0.92) translateY(40px);
+    clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+  }
+
+  60% {
+    opacity: 1;
+    filter: blur(2px);
+    transform: scale(1.04) translateY(-8px);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1) translateY(0);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+}
+
+@keyframes cardDisintegrate {
+  0% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1) translateY(0);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  60% {
+    opacity: 0.7;
+    filter: blur(8px);
+    transform: scale(0.98) translateY(-16px) skewX(-8deg);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+
+  100% {
+    opacity: 0;
+    filter: blur(24px);
+    transform: scale(0.92) translateY(-60px) skewX(-18deg);
+    clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%);
+  }
+}
+
+.glassPanel {
+  max-width: 800px;
+  box-sizing: border-box;
+}
+
+.panelWrap {
+  max-width: 1000px;
+  box-sizing: border-box;
+  padding-left: 0;
+  padding-right: 0;
+  margin-left: 180px;
+  margin-right: auto;
+}
+
+.dsMain {
+  padding-left: 0;
+  padding-right: 0;
+  overflow-y: auto;
+  max-height: calc(100vh - 64px);
+}
+
+.dsListItem {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }

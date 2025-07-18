@@ -488,7 +488,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                 </text>
                 {renderBreadboardLook(breadboard1Pos)}
             </g>
-            {/* Breadboard 2 (with resistors/LEDs, draggable) */}
             <g
                 onMouseDown={e => onMouseDown('breadboard2', e)}
                 style={{ cursor: 'grab' }}
@@ -504,7 +503,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                     strokeWidth={2}
                     style={{ filter: 'drop-shadow(0 0 12px #00cfff55)' }}
                 />
-                {/* Glassy effect */}
                 <rect
                     x={breadboard2Pos.x + 2}
                     y={breadboard2Pos.y + 2}
@@ -530,7 +528,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                 {renderBreadboardLook(breadboard2Pos)}
                 {renderBreadboard2Components()}
             </g>
-            {/* ESP32 #1 (glass style, draggable) */}
             <g
                 onMouseDown={e => onMouseDown('esp1', e)}
                 style={{ cursor: 'grab' }}
@@ -559,7 +556,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                 </text>
                 {renderPins(espPins, esp1Pos, espWidth, espHeight)}
             </g>
-            {/* ESP32 #2 (glass style, draggable) */}
             <g
                 onMouseDown={e => onMouseDown('esp2', e)}
                 style={{ cursor: 'grab' }}
@@ -588,7 +584,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                 </text>
                 {renderPins(espPins, esp2Pos, espWidth, espHeight)}
             </g>
-            {/* Raspberry Pi Pico (glass style, draggable) */}
             <g
                 onMouseDown={e => onMouseDown('pico', e)}
                 style={{ cursor: 'grab' }}
@@ -617,7 +612,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                 </text>
                 {renderPins(picoPins, picoPos, picoWidth, picoHeight)}
             </g>
-            {/* Add SRAM and EEPROM chips to SVG */}
             <g onMouseDown={e => onMouseDown('sram1', e)} style={{ cursor: 'grab' }}>
                 <rect x={sram1Pos.x} y={sram1Pos.y} width={sramWidth} height={sramHeight} rx={18}
                     fill="url(#sramGrad)" stroke="#8e24aa" strokeWidth={3}
@@ -646,7 +640,6 @@ const InteractiveScheme: React.FC<{ resetLayout?: number }> = ({ resetLayout }) 
                     <stop offset="100%" stopColor="#ff9800" />
                 </linearGradient>
             </defs>
-            {/* Add wires for power rails and SRAM/EEPROM connections */}
             {extraWires.map((w: { from: () => { x: number; y: number }, to: () => { x: number; y: number }, color: string }, i: number) => {
                 const from = w.from();
                 const to = w.to();
