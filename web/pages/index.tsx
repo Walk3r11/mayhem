@@ -19,7 +19,7 @@ const Home: React.FC = () => {
                     <li className={styles.dsListItem}>LED arrays as system status indicators, boot-up animations, and diagnostics</li>
                     <li className={styles.dsListItem}>Parallel and serial shift registers for efficient expansion of digital I/O</li>
                     <li className={styles.dsListItem}>Mass storage integration with a microSD card module</li>
-                    <li className={styles.dsListItem}>Visual feedback through a 2.8” SPI TFT display</li>
+                    <li className={styles.dsListItem}>Visual feedback through a 4” SPI TFT display</li>
                     <li className={styles.dsListItem}>User inputs via DIP switches and buttons</li>
                     <li className={styles.dsListItem}>Modular power management supporting USB and battery sources</li>
                 </ul>
@@ -34,7 +34,7 @@ const Home: React.FC = () => {
                         { name: 'ESP32 Boards (x2)', role: 'Main “processing units” running complex LED control and managing communication' },
                         { name: 'Raspberry Pi Pico', role: '“Thermal control unit,” reading temperature sensors and triggering fans' },
                         { name: 'Arduino Nano/Uno', role: 'Handles auxiliary LED arrays and additional I/O expansion' },
-                        { name: 'SN74HC165/595', role: 'Shift registers for scalable I/O, mimicking CPU buses' },
+                        { name: 'SN74HC165N/595N', role: 'Shift registers for scalable I/O, mimicking CPU buses' },
                         { name: 'MicroSD Card Module', role: 'Persistent storage for logs or data' },
                         { name: '5x 5V Fans', role: 'Controlled based on temperature thresholds for dynamic cooling' },
                         { name: '2.8” SPI TFT Display', role: 'Live visual feedback on system operation' },
