@@ -1,181 +1,36 @@
 #include <TFT_eSPI.h>
 
-#define UART_RX 16
-#define UART_TX 17
-#define UART_BAUD 115200
-
 #define GREEN_LED 12
 #define RED_LED 13
 
 TFT_eSPI tft = TFT_eSPI();
 
-enum ProcessState {
-  PROCESS_READY,
-  PROCESS_RUNNING,
-  PROCESS_BLOCKED,
-  PROCESS_TERMINATED
+enum UIState
+{
+  UI_LOGIN,
+  UI_DESKTOP
 };
+UIState ui_state = UI_LOGIN;
+unsigned long login_start_time = 0;
 
-struct Process {
-  int pid;
-  ProcessState state;
-  void (*entry_point)();
-  int priority;
-  unsigned long last_run;
-  struct Process *next;
+enum App
+{
+  APP_TERMINAL,
+  APP_COUNT
 };
+bool app_open[APP_COUNT] = {false};
 
-Process *process_list = NULL;
-Process *running_process = NULL;
-int next_pid = 1;
+// Serial command buffer
+char serial_cmd_buf[32];
+int serial_cmd_pos = 0;
 
-enum SysCall {
-  SYS_YIELD = 1,
-  SYS_EXIT = 2,
-  SYS_LOG = 3
-};
+unsigned long last_cursor_toggle = 0;
+bool cursor_visible = true;
 
-void send_create_process(int pid, int priority) {
-  char msg[32];
-  snprintf(msg, sizeof(msg), "CREATE:%d:%d\n", pid, priority);
-  Serial2.print(msg);
-}
+void clear_screen() { tft.fillScreen(tft.color565(10, 8, 24)); }
 
-void send_destroy_process(int pid) {
-  char msg[32];
-  snprintf(msg, sizeof(msg), "DESTROY:%d\n", pid);
-  Serial2.print(msg);
-}
-
-void handle_uart_message(const char *msg) {
-  if (strncmp(msg, "CREATE:", 7) == 0) {
-    int pid, priority;
-    if (sscanf(msg + 7, "%d:%d", &pid, &priority) == 2) {
-      Process *p = (Process *)malloc(sizeof(Process));
-      if (!p) return;
-      p->pid = pid;
-      p->state = PROCESS_READY;
-      p->entry_point = NULL;
-      p->priority = priority;
-      p->last_run = 0;
-      p->next = process_list;
-      process_list = p;
-      Serial.printf("[UART] Created remote process: PID=%d, priority=%d\n", pid, priority);
-    }
-  } else if (strncmp(msg, "DESTROY:", 8) == 0) {
-    int pid;
-    if (sscanf(msg + 8, "%d", &pid) == 1) {
-      Process **pp = &process_list;
-      while (*pp) {
-        if ((*pp)->pid == pid) {
-          Process *to_delete = *pp;
-          *pp = (*pp)->next;
-          to_delete->state = PROCESS_TERMINATED;
-          free(to_delete);
-          Serial.printf("[UART] Destroyed remote process: PID=%d\n", pid);
-          return;
-        }
-        pp = &((*pp)->next);
-      }
-    }
-  }
-}
-
-int create_process(const char *name, void (*entry_point)(), int priority) {
-  Process *p = (Process *)malloc(sizeof(Process));
-  if (!p) return -1;
-  p->pid = next_pid++;
-  p->state = PROCESS_READY;
-  p->entry_point = entry_point;
-  p->priority = priority;
-  p->last_run = 0;
-  p->next = process_list;
-  process_list = p;
-  Serial.printf("[KERNEL] Created process: %s (PID: %d)\n", name, p->pid);
-  send_create_process(p->pid, priority);
-  return p->pid;
-}
-
-void destroy_process(int pid) {
-  Process **pp = &process_list;
-  while (*pp) {
-    if ((*pp)->pid == pid) {
-      Process *to_delete = *pp;
-      *pp = (*pp)->next;
-      to_delete->state = PROCESS_TERMINATED;
-      Serial.printf("[KERNEL] Destroyed process: PID: %d\n", pid);
-      send_destroy_process(pid);
-      free(to_delete);
-      return;
-    }
-    pp = &((*pp)->next);
-  }
-}
-
-void schedule() {
-  Process *p = process_list;
-  Process *next_proc = NULL;
-  unsigned long now = millis();
-  int highest_priority = -1;
-  while (p) {
-    if (p->state == PROCESS_READY && p->priority > highest_priority) {
-      highest_priority = p->priority;
-      next_proc = p;
-    }
-    p = p->next;
-  }
-  if (next_proc && next_proc != running_process) {
-    if (running_process)
-      running_process->state = PROCESS_READY;
-    running_process = next_proc;
-    running_process->state = PROCESS_RUNNING;
-    running_process->last_run = now;
-    Serial.printf("[SCHEDULER] Switched to PID: %d\n", running_process->pid);
-  }
-}
-
-int syscall(int syscall_num, int arg1, int arg2, int arg3) {
-  switch (syscall_num) {
-    case SYS_YIELD:
-      if (running_process)
-        running_process->state = PROCESS_READY;
-      return 0;
-    case SYS_EXIT:
-      if (running_process) {
-        running_process->state = PROCESS_TERMINATED;
-        Serial.printf("[KERNEL] Process %d exited\n", running_process->pid);
-      }
-      return 0;
-    case SYS_LOG:
-      Serial.println((const char *)arg1);
-      return 0;
-    default:
-      Serial.printf("[KERNEL] Unknown syscall: %d\n", syscall_num);
-      return -1;
-  }
-}
-
-#define UART_BUF_SIZE 128
-char uart_buf[UART_BUF_SIZE];
-int uart_buf_pos = 0;
-void poll_uart() {
-  while (Serial2.available()) {
-    char c = Serial2.read();
-    if (c == '\n' || uart_buf_pos >= UART_BUF_SIZE - 1) {
-      uart_buf[uart_buf_pos] = 0;
-      handle_uart_message(uart_buf);
-      uart_buf_pos = 0;
-    } else {
-      uart_buf[uart_buf_pos++] = c;
-    }
-  }
-}
-
-void clear_screen() {
-  tft.fillScreen(TFT_BLACK);
-}
-
-void print_centered(int y, const char *text, uint16_t color = TFT_WHITE) {
+void print_centered(int y, const char *text, uint16_t color = TFT_WHITE)
+{
   tft.setTextColor(color);
   tft.setTextSize(2);
   int x = (tft.width() - tft.textWidth(text)) / 2;
@@ -183,118 +38,264 @@ void print_centered(int y, const char *text, uint16_t color = TFT_WHITE) {
   tft.print(text);
 }
 
-const char *correct_password = "1234";
-
-void draw_login_ui() {
-  tft.fillScreen(TFT_DARKGREY);
-  tft.fillRoundRect(20, 40, 280, 180, 15, TFT_LIGHTGREY);
-  tft.setTextColor(TFT_BLACK);
+void draw_login_ui()
+{
+  tft.fillScreen(tft.color565(10, 8, 24));
+  int box_w = 280, box_h = 180;
+  int box_x = (tft.width() - box_w) / 2;
+  int box_y = (tft.height() - box_h) / 2;
+  int radius = 22;
+  for (int i = 0; i < box_h; i++)
+  {
+    uint8_t r = 40 + (120 - 40) * i / box_h;
+    uint8_t g = 200 + (40 - 200) * i / box_h;
+    uint8_t b = 255 + (255 - 255) * i / box_h;
+    tft.drawRoundRect(box_x, box_y + i, box_w, 1, radius,
+                      tft.color565(r, g, b));
+  }
+  tft.drawRoundRect(box_x - 2, box_y - 2, box_w + 4, box_h + 4, radius + 2,
+                    tft.color565(0, 255, 255));
+  tft.drawRoundRect(box_x - 4, box_y - 4, box_w + 8, box_h + 8, radius + 4,
+                    tft.color565(120, 0, 255));
+  tft.fillRoundRect(box_x, box_y, box_w, box_h, radius,
+                    tft.color565(120, 80, 200));
+  tft.setTextColor(tft.color565(0, 255, 255));
   tft.setTextSize(3);
-  print_centered(60, "MAYHEM Login");
+  print_centered(box_y + 32, "MAYHEM Login");
+  tft.setTextColor(tft.color565(180, 0, 255));
   tft.setTextSize(2);
-  print_centered(120, "Enter Password:");
-  tft.fillRoundRect(60, 150, 200, 30, 8, TFT_WHITE);
+  print_centered(box_y + 80, "Enter Password:");
+  int input_w = 200, input_h = 38;
+  int input_x = (tft.width() - input_w) / 2;
+  int input_y = box_y + 110;
+  int input_radius = 12;
+  tft.drawRoundRect(input_x - 2, input_y - 2, input_w + 4, input_h + 4,
+                    input_radius + 2, tft.color565(0, 255, 255));
+  tft.drawRoundRect(input_x - 4, input_y - 4, input_w + 8, input_h + 8,
+                    input_radius + 4, tft.color565(120, 0, 255));
+  tft.fillRoundRect(input_x, input_y, input_w, input_h, input_radius,
+                    tft.color565(20, 18, 40));
+  tft.drawRoundRect(input_x, input_y, input_w, input_h, input_radius,
+                    tft.color565(0, 255, 255));
 }
 
-void login_process() {
-  static bool init = false;
-  static char input_buf[32];
-  static int input_pos = 0;
-
-  if (!init) {
-    draw_login_ui();
-    input_pos = 0;
-    input_buf[0] = 0;
-    init = true;
-    Serial.println("Enter password:");
-  }
-
-  while (Serial.available()) {
-    char c = Serial.read();
-    if (c == '\r' || c == '\n') {
-      input_buf[input_pos] = 0;
-      Serial.println();
-
-      if (strcmp(input_buf, correct_password) == 0) {
-        clear_screen();
-        print_centered(40, "Login successful!", TFT_GREEN);
-        delay(1000);
-        destroy_process(running_process->pid);
-        create_process("desktop", desktop_process, 10);
-        return;
-      } else {
-        draw_login_ui();
-        print_centered(200, "Wrong password", TFT_RED);
-        Serial.println("Wrong password");
-        input_pos = 0;
-        input_buf[0] = 0;
-      }
-    } else if (c >= 32 && c < 127 && input_pos < 31) {
-      input_buf[input_pos++] = c;
-      input_buf[input_pos] = 0;
-      tft.fillRoundRect(65, 155, 190, 20, 4, TFT_WHITE);
-      tft.setCursor(70, 160);
-      tft.setTextColor(TFT_BLACK);
-      for (int i = 0; i < input_pos; i++) tft.print('*');
-      Serial.print('*');
-    }
-  }
-
-  syscall(SYS_YIELD, 0, 0, 0);
-}
-
-void draw_wallpaper() {
+void draw_wallpaper()
+{
   int h = tft.height();
   int w = tft.width();
-  for (int y = 0; y < h; y++) {
-    uint8_t blend = map(y, 0, h, 30, 180);
-    uint16_t color = tft.color565(blend / 3, blend / 3, blend);
-    tft.drawFastHLine(0, y, w, color);
+  tft.fillScreen(tft.color565(10, 8, 24));
+  for (int i = 0; i < 32; i++)
+  {
+    int x0 = random(0, w);
+    int y0 = random(0, h);
+    int x1 = random(0, w);
+    int y1 = random(0, h);
+    uint16_t color =
+        tft.color565(random(100, 255), random(0, 100), random(180, 255));
+    tft.drawLine(x0, y0, x1, y1, color);
+  }
+  for (int i = 0; i < 8; i++)
+  {
+    int cx = random(w);
+    int cy = random(h);
+    int r = random(10, 32);
+    uint16_t color =
+        tft.color565(random(180, 255), random(0, 100), random(180, 255));
+    tft.drawCircle(cx, cy, r, color);
+  }
+  tft.setTextSize(6);
+  int logo_w = tft.textWidth("MAYHEM");
+  int logo_h = 8 * 6; // 8px per char row, size=6
+  int logo_x = (w - logo_w) / 2;
+  int logo_y = (h - logo_h) / 2;
+  for (int i = 0; i < 4; i++)
+  {
+    int dx = random(-3, 4);
+    int dy = random(-3, 4);
+    uint16_t color = tft.color565(200 + random(-30, 30), 0, 255);
+    tft.setTextColor(color);
+    tft.setCursor(logo_x + dx, logo_y + dy);
+    tft.print("MAYHEM");
+  }
+  tft.setTextColor(tft.color565(255, 255, 255));
+  tft.setCursor(logo_x, logo_y);
+  tft.print("MAYHEM");
+  tft.setTextSize(2);
+}
+
+void draw_icon(int x, int y, bool selected)
+{
+  int w = 48, h = 48, r = 10;
+  uint16_t border =
+      selected ? tft.color565(255, 255, 0) : tft.color565(0, 255, 255);
+  tft.fillRoundRect(x, y, w, h, r, tft.color565(30, 30, 40));
+  tft.drawRoundRect(x, y, w, h, r, border);
+  tft.setTextColor(border);
+  tft.setTextSize(2);
+  tft.setCursor(x + 12, y + 16);
+  tft.print(">_");
+  tft.setTextSize(2);
+}
+
+void draw_window(int x, int y, int w, int h, const char *title, bool focused)
+{
+  int r = 12;
+  tft.fillRoundRect(x, y, w, h, r, tft.color565(20, 20, 30));
+  tft.drawRoundRect(x, y, w, h, r,
+                    focused ? tft.color565(0, 255, 255)
+                            : tft.color565(80, 80, 80));
+  tft.fillRoundRect(x, y, w, 32, r, tft.color565(40, 40, 60));
+  tft.setTextColor(tft.color565(0, 255, 255));
+  tft.setTextSize(2);
+  tft.setCursor(x + 16, y + 8);
+  tft.print(title);
+  tft.setTextColor(tft.color565(255, 80, 80));
+  tft.setCursor(x + w - 32, y + 8);
+  tft.print("X");
+  tft.setTextSize(2);
+}
+
+void draw_terminal_content(bool cursor)
+{
+  int win_x = 20;
+  int win_y = 30;
+  tft.setTextColor(tft.color565(0, 255, 0));
+  tft.setTextSize(2);
+  tft.setCursor(win_x + 16, win_y + 48);
+  tft.print("> ");
+  if (cursor)
+  {
+    tft.print("_");
+  }
+  else
+  {
+    tft.print(" ");
+  }
+  tft.setTextSize(2);
+}
+
+void erase_terminal_cursor()
+{
+  int win_x = 20;
+  int win_y = 30;
+  int cursor_x = win_x + 16 + tft.textWidth("> ");
+  int cursor_y = win_y + 48;
+  tft.setTextSize(2);
+  int cursor_w = tft.textWidth("_");
+  int cursor_h = 16;
+  tft.fillRect(cursor_x, cursor_y, cursor_w, cursor_h,
+               tft.color565(20, 20, 30));
+}
+
+void draw_desktop()
+{
+  draw_wallpaper();
+  draw_icon(32, tft.height() - 80, false);
+  if (app_open[APP_TERMINAL])
+  {
+    draw_window(20, 30, tft.width() - 40, tft.height() - 60, "Terminal", true);
+    draw_terminal_content(cursor_visible);
   }
 }
 
-void desktop_process() {
+void desktop_process()
+{
   static bool init = false;
-
-  if (!init) {
-    draw_wallpaper();
-    print_centered(40, "MAYHEM Desktop", TFT_WHITE);
-    print_centered(80, "Welcome, user!", TFT_CYAN);
+  if (!init)
+  {
+    draw_desktop();
+    print_centered(40, "MAYHEM Desktop", tft.color565(0, 255, 255));
+    print_centered(80, "Welcome, user!", tft.color565(180, 0, 255));
     init = true;
   }
-
-  syscall(SYS_YIELD, 0, 0, 0);
 }
 
-void kernel_init() {
+void handle_serial_command(const char *cmd)
+{
+  if (strcmp(cmd, "open") == 0)
+  {
+    app_open[APP_TERMINAL] = true;
+    draw_desktop();
+    Serial.println("[DESKTOP] Terminal opened");
+  }
+  else if (strcmp(cmd, "close") == 0)
+  {
+    app_open[APP_TERMINAL] = false;
+    draw_desktop();
+    Serial.println("[DESKTOP] Terminal closed");
+  }
+}
+
+void kernel_init()
+{
   pinMode(GREEN_LED, OUTPUT);
   pinMode(RED_LED, OUTPUT);
   digitalWrite(GREEN_LED, HIGH);
   digitalWrite(RED_LED, LOW);
-  Serial2.begin(UART_BAUD, SERIAL_8N1, UART_RX, UART_TX);
   Serial.begin(115200);
-
   tft.init();
   tft.setRotation(1);
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(tft.color565(10, 8, 24));
   tft.setTextSize(2);
-  tft.setTextColor(TFT_WHITE);
-
+  tft.setTextColor(tft.color565(0, 255, 255));
   Serial.println("[KERNEL] Kernel initialized");
-
-  create_process("login", login_process, 10);
+  draw_login_ui();
+  login_start_time = millis();
+  ui_state = UI_LOGIN;
 }
 
-void setup() {
-  delay(1000);
-  kernel_init();
-  Serial.println("[KERNEL] System ready - starting scheduler");
+void setup()
+{
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  digitalWrite(GREEN_LED, HIGH);
+  digitalWrite(RED_LED, LOW);
+  Serial.begin(115200);
+  tft.init();
+  tft.setRotation(1);
+  tft.fillScreen(tft.color565(10, 8, 24));
+  tft.setTextSize(2);
+  tft.setTextColor(tft.color565(0, 255, 255));
+  draw_login_ui();
+  login_start_time = millis();
+  ui_state = UI_LOGIN;
 }
 
-void loop() {
-  poll_uart();
-  schedule();
-  if (running_process && running_process->state == PROCESS_RUNNING && running_process->entry_point) {
-    running_process->entry_point();
+void loop()
+{
+  if (ui_state == UI_LOGIN)
+  {
+    if (millis() - login_start_time > 1500)
+    {
+      draw_desktop();
+      ui_state = UI_DESKTOP;
+    }
+  }
+  else if (ui_state == UI_DESKTOP)
+  {
+    while (Serial.available())
+    {
+      char c = Serial.read();
+      if (c == '\n' || c == '\r')
+      {
+        serial_cmd_buf[serial_cmd_pos] = 0;
+        handle_serial_command(serial_cmd_buf);
+        serial_cmd_pos = 0;
+      }
+      else if (serial_cmd_pos < (int)sizeof(serial_cmd_buf) - 1)
+      {
+        serial_cmd_buf[serial_cmd_pos++] = c;
+      }
+    }
+    if (app_open[APP_TERMINAL])
+    {
+      if (millis() - last_cursor_toggle > 500)
+      {
+        erase_terminal_cursor();
+        cursor_visible = !cursor_visible;
+        last_cursor_toggle = millis();
+        draw_terminal_content(cursor_visible);
+      }
+    }
   }
 }
