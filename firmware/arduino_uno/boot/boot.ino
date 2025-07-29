@@ -7,18 +7,14 @@ const int sensorPin = A0;
 void setup()
 {
   pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, HIGH);
-
   pinMode(green_led, OUTPUT);
-  digitalWrite(green_led, HIGH);
-
   pinMode(red_led, OUTPUT);
-  digitalWrite(red_led, LOW);
-
   pinMode(yellow_led, OUTPUT);
-  digitalWrite(yellow_led, LOW);
 
-  Serial.begin(9600);
+  digitalWrite(relayPin, HIGH);
+  digitalWrite(green_led, HIGH);
+  digitalWrite(red_led, LOW);
+  digitalWrite(yellow_led, LOW);
 }
 
 void loop()
