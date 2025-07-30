@@ -8,28 +8,28 @@
 
 TFT_eSPI tft = TFT_eSPI();
 
-enum UIState
+struct Window
 {
-    UI_LOGIN,
-    UI_DESKTOP
+    int x, y, w, h;
+    const char *title;
+    bool focused;
 };
 
-UIState ui_state = UI_LOGIN;
-unsigned long login_start_time = 0;
-
+// App enum and related variables
 enum App
 {
-    APP_TERMINAL = 0,
-    APP_FILES = 1,
-    APP_BENCHMARK = 2,
-    APP_SETTINGS = 3,
+    APP_TERMINAL,
+    APP_FILES,
+    APP_BENCHMARK,
+    APP_SETTINGS,
+    APP_ACTIVITY_MONITOR,
     APP_COUNT
 };
 
-bool app_open[APP_COUNT] = {false, false, false, false};
-const int desktop_app_count = 4;
-
+bool app_open[APP_COUNT] = {false, false, false, false, false};
+const int desktop_app_count = 5;
 int desktop_selected = 0;
+int tab_count = 0;
 
 char serial_cmd_buf[32];
 int serial_cmd_pos = 0;
@@ -37,6 +37,16 @@ int serial_cmd_pos = 0;
 unsigned long last_cursor_toggle = 0;
 bool cursor_visible = true;
 
+enum UIState
+{
+    UI_LOGIN,
+    UI_DESKTOP
+};
+
+unsigned long login_start_time = 0;
+UIState ui_state = UI_LOGIN;
+
+void draw_desktop();
 void clear_screen()
 {
     tft.fillScreen(tft.color565(10, 8, 24));
@@ -216,7 +226,7 @@ void draw_icon(int x, int y, bool selected, int app)
     tft.drawRoundRect(x, y, w, h, r, border);
     tft.setTextColor(border);
     tft.setTextSize(2);
-    const char *app_names[4] = {"Terminal", "Files", "Benchmark", "Settings"};
+    const char *app_names[5] = {"Terminal", "Files", "Benchmark", "Settings", "Activity"};
 
     if (app == 0)
     {
@@ -251,6 +261,15 @@ void draw_icon(int x, int y, bool selected, int app)
         tft.drawCircle(cx, cy, r - 5, tft.color565(120, 120, 120));
         tft.fillCircle(cx, cy, 4, tft.color565(180, 180, 180));
     }
+    else if (app == 4)
+    {
+        // Activity Monitor icon: bar chart
+        int bx = x + 10, by = y + 34;
+        tft.fillRect(bx, by - 10, 6, 10, tft.color565(0, 255, 0));
+        tft.fillRect(bx + 10, by - 18, 6, 18, tft.color565(255, 255, 0));
+        tft.fillRect(bx + 20, by - 6, 6, 6, tft.color565(255, 0, 0));
+        tft.drawRect(bx, by - 18, 26, 18, tft.color565(120, 120, 120));
+    }
 
     tft.setTextColor(border);
     tft.setTextSize(1);
@@ -277,17 +296,55 @@ void draw_icon(int x, int y, bool selected, int app)
     tft.setTextSize(2);
 }
 
-int tab_count = 0;
-
-struct Window
+void animate_window_open(const Window &targetWin)
 {
-    int x, y, w, h;
-    const char *title;
-    bool focused;
-};
+    int steps = 8;
+    int prev_x = -1, prev_y = -1, prev_w = -1, prev_h = -1;
+    for (int i = 1; i <= steps; ++i)
+    {
+        float t = (float)i / steps;
+        int x = targetWin.x + (targetWin.w / 2) * (1 - t);
+        int y = targetWin.y + (targetWin.h / 2) * (1 - t);
+        int w = targetWin.w * t;
+        int h = targetWin.h * t;
+        if (i > 1)
+        {
+            tft.fillRoundRect(prev_x, prev_y, prev_w, prev_h, 12, tft.color565(10, 8, 24));
+        }
+        Window animWin = {x, y, w, h, targetWin.title, targetWin.focused};
+        draw_window(animWin);
+        prev_x = x;
+        prev_y = y;
+        prev_w = w;
+        prev_h = h;
+    }
+}
 
-void draw_window(const Window &win);
-void draw_benchmark_content(const Window &win);
+void animate_window_close(const Window &targetWin)
+{
+    int steps = 8;
+    int prev_x = -1, prev_y = -1, prev_w = -1, prev_h = -1;
+    for (int i = steps; i >= 1; --i)
+    {
+        float t = (float)i / steps;
+        int x = targetWin.x + (targetWin.w / 2) * (1 - t);
+        int y = targetWin.y + (targetWin.h / 2) * (1 - t);
+        int w = targetWin.w * t;
+        int h = targetWin.h * t;
+        if (i < steps)
+        {
+            tft.fillRoundRect(prev_x, prev_y, prev_w, prev_h, 12, tft.color565(10, 8, 24));
+        }
+        Window animWin = {x, y, w, h, targetWin.title, targetWin.focused};
+        draw_window(animWin);
+        prev_x = x;
+        prev_y = y;
+        prev_w = w;
+        prev_h = h;
+    }
+    tft.fillRoundRect(prev_x, prev_y, prev_w, prev_h, 12, tft.color565(10, 8, 24));
+    draw_desktop();
+}
 
 void draw_window(const Window &win)
 {
@@ -501,6 +558,62 @@ void run_benchmark_tests()
     bench_seconds_left = 0;
 }
 
+void draw_benchmark_content(const Window &win);
+void draw_activity_monitor_content(const Window &win)
+{
+    int x = win.x + 20;
+    int y = win.y + 48;
+    int line_h = 24;
+    tft.setTextColor(tft.color565(0, 255, 255));
+    tft.setTextSize(2);
+    tft.setCursor(x, y);
+    tft.print("System Usage:");
+    y += line_h;
+
+    // CPU (simulated as always 100% on microcontroller)
+    tft.setTextColor(tft.color565(255, 255, 0));
+    tft.setCursor(x, y);
+    tft.print("CPU: ");
+    tft.print(getCpuFrequencyMhz());
+    tft.print(" MHz");
+    tft.print(" (ESP32)");
+    y += line_h;
+
+    // RAM
+    tft.setTextColor(tft.color565(0, 255, 0));
+    tft.setCursor(x, y);
+    uint32_t heap = ESP.getFreeHeap();
+    tft.print("RAM: ");
+    tft.print(heap / 1024);
+    tft.print(" KB free");
+    y += line_h;
+
+    // EEPROM (simulated, as not used in this code)
+    tft.setTextColor(tft.color565(0, 200, 255));
+    tft.setCursor(x, y);
+    tft.print("EEPROM: ");
+    tft.print("N/A");
+    y += line_h;
+
+    // Running tasks (open apps)
+    tft.setTextColor(tft.color565(255, 180, 180));
+    tft.setCursor(x, y);
+    tft.print("Running Apps:");
+    y += line_h;
+    tft.setTextColor(tft.color565(255, 255, 255));
+    const char *app_names[5] = {"Terminal", "Files", "Benchmark", "Settings", "Activity Monitor"};
+    for (int i = 0; i < APP_COUNT; ++i)
+    {
+        if (app_open[i])
+        {
+            tft.setCursor(x + 16, y);
+            tft.print("- ");
+            tft.print(app_names[i]);
+            y += line_h;
+        }
+    }
+}
+
 void draw_benchmark_content(const Window &win)
 {
     int x = win.x + 20;
@@ -586,7 +699,8 @@ void draw_desktop()
     int icon_y = margin + 16;
     int icon_w = 48;
     int icon_gap = 16;
-    int icon_x[4] = {margin, margin + icon_w + icon_gap, margin + 2 * (icon_w + icon_gap), margin + 3 * (icon_w + icon_gap)};
+
+    int icon_x[5] = {margin, margin + icon_w + icon_gap, margin + 2 * (icon_w + icon_gap), margin + 3 * (icon_w + icon_gap), margin + 4 * (icon_w + icon_gap)};
 
     if (focus_state == FOCUS_DESKTOP)
     {
@@ -597,6 +711,12 @@ void draw_desktop()
     {
         for (int i = 0; i < desktop_app_count; ++i)
             draw_icon(icon_x[i], icon_y, false, i);
+    }
+    if (app_open[APP_ACTIVITY_MONITOR])
+    {
+        Window actWin = {80, 60, tft.width() - 160, tft.height() - 120, "Activity Monitor", true};
+        draw_window(actWin);
+        draw_activity_monitor_content(actWin);
     }
 
     if (app_open[APP_TERMINAL])
@@ -647,6 +767,8 @@ void handle_serial_command(const char *cmd)
         {
             if (desktop_selected == APP_TERMINAL)
             {
+                Window termWin = {20, 30, tft.width() - 40, tft.height() - 40, "Terminal", true};
+                animate_window_open(termWin);
                 app_open[APP_TERMINAL] = true;
                 focus_state = FOCUS_WINDOW;
                 draw_desktop();
@@ -654,6 +776,8 @@ void handle_serial_command(const char *cmd)
             }
             else if (desktop_selected == APP_FILES)
             {
+                Window filesWin = {40, 50, tft.width() - 80, tft.height() - 80, "Files", true};
+                animate_window_open(filesWin);
                 app_open[APP_FILES] = true;
                 focus_state = FOCUS_WINDOW;
                 draw_desktop();
@@ -661,6 +785,10 @@ void handle_serial_command(const char *cmd)
             }
             else if (desktop_selected == APP_BENCHMARK)
             {
+                int margin_x = 30;
+                int margin_y = 30;
+                Window benchWin = {margin_x, margin_y, tft.width() - 2 * margin_x, tft.height() - 2 * margin_y, "Benchmark", true};
+                animate_window_open(benchWin);
                 app_open[APP_BENCHMARK] = true;
                 focus_state = FOCUS_WINDOW;
                 bench_result[0] = 0;
@@ -669,10 +797,21 @@ void handle_serial_command(const char *cmd)
             }
             else if (desktop_selected == APP_SETTINGS)
             {
+                Window settingsWin = {60, 70, tft.width() - 120, tft.height() - 120, "Settings", true};
+                animate_window_open(settingsWin);
                 app_open[APP_SETTINGS] = true;
                 focus_state = FOCUS_WINDOW;
                 draw_desktop();
                 Serial.println("[DESKTOP] Settings opened");
+            }
+            else if (desktop_selected == APP_ACTIVITY_MONITOR)
+            {
+                Window actWin = {80, 60, tft.width() - 160, tft.height() - 120, "Activity Monitor", true};
+                animate_window_open(actWin);
+                app_open[APP_ACTIVITY_MONITOR] = true;
+                focus_state = FOCUS_WINDOW;
+                draw_desktop();
+                Serial.println("[DESKTOP] Activity Monitor opened");
             }
         }
         else if (focus_state == FOCUS_MENU)
@@ -688,6 +827,34 @@ void handle_serial_command(const char *cmd)
     }
     else if (strcmp(cmd, "close") == 0)
     {
+        // Animate closing for each open app
+        if (app_open[APP_TERMINAL])
+        {
+            Window termWin = {20, 30, tft.width() - 40, tft.height() - 40, "Terminal", true};
+            animate_window_close(termWin);
+        }
+        if (app_open[APP_FILES])
+        {
+            Window filesWin = {40, 50, tft.width() - 80, tft.height() - 80, "Files", true};
+            animate_window_close(filesWin);
+        }
+        if (app_open[APP_BENCHMARK])
+        {
+            int margin_x = 30;
+            int margin_y = 30;
+            Window benchWin = {margin_x, margin_y, tft.width() - 2 * margin_x, tft.height() - 2 * margin_y, "Benchmark", true};
+            animate_window_close(benchWin);
+        }
+        if (app_open[APP_SETTINGS])
+        {
+            Window settingsWin = {60, 70, tft.width() - 120, tft.height() - 120, "Settings", true};
+            animate_window_close(settingsWin);
+        }
+        if (app_open[APP_ACTIVITY_MONITOR])
+        {
+            Window actWin = {80, 60, tft.width() - 160, tft.height() - 120, "Activity Monitor", true};
+            animate_window_close(actWin);
+        }
         for (int i = 0; i < APP_COUNT; ++i)
             app_open[i] = false;
         focus_state = FOCUS_DESKTOP;
