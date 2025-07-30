@@ -137,11 +137,11 @@ void draw_login_ui()
 
     tft.setTextColor(tft.color565(0, 255, 255));
     tft.setTextSize(3);
-    print_centered(box_y + 32, "MAYHEM Login");
+    print_centered(box_y + 32, "MAYHEM Login", tft.color565(0, 255, 255));
 
     tft.setTextColor(tft.color565(180, 0, 255));
     tft.setTextSize(2);
-    print_centered(box_y + 80, "Enter Password:");
+    print_centered(box_y + 80, "Enter Password:", tft.color565(180, 0, 255));
 
     int input_w = 200, input_h = 38;
     int input_x = (tft.width() - input_w) / 2;
