@@ -15,7 +15,6 @@ struct Window
     bool focused;
 };
 
-// App enum and related variables
 enum App
 {
     APP_TERMINAL,
@@ -36,6 +35,10 @@ int serial_cmd_pos = 0;
 
 unsigned long last_cursor_toggle = 0;
 bool cursor_visible = true;
+unsigned long last_frame = 0;
+const int FRAME_DELAY = 30;
+bool needs_redraw = true;
+bool wallpaper_drawn = false;
 
 enum UIState
 {
@@ -46,7 +49,8 @@ enum UIState
 unsigned long login_start_time = 0;
 UIState ui_state = UI_LOGIN;
 
-void draw_desktop();
+void draw_desktop(bool partial = false);
+
 void clear_screen()
 {
     tft.fillScreen(tft.color565(10, 8, 24));
@@ -114,8 +118,10 @@ void draw_top_bar()
             tft.print("Benchmark");
         else if (app_open[APP_SETTINGS])
             tft.print("Settings");
+        else if (app_open[APP_ACTIVITY_MONITOR])
+            tft.print("Activity Monitor");
 
-        if (app_open[APP_TERMINAL] || app_open[APP_FILES])
+        if (app_open[APP_TERMINAL] || app_open[APP_FILES] || app_open[APP_ACTIVITY_MONITOR])
         {
             tft.setTextColor(tft.color565(180, 255, 255));
             tft.print("  File  Edit  View");
@@ -263,7 +269,6 @@ void draw_icon(int x, int y, bool selected, int app)
     }
     else if (app == 4)
     {
-        // Activity Monitor icon: bar chart
         int bx = x + 10, by = y + 34;
         tft.fillRect(bx, by - 10, 6, 10, tft.color565(0, 255, 0));
         tft.fillRect(bx + 10, by - 18, 6, 18, tft.color565(255, 255, 0));
@@ -298,8 +303,9 @@ void draw_icon(int x, int y, bool selected, int app)
 
 void animate_window_open(const Window &targetWin)
 {
-    int steps = 8;
+    int steps = 12;
     int prev_x = -1, prev_y = -1, prev_w = -1, prev_h = -1;
+    tft.startWrite();
     for (int i = 1; i <= steps; ++i)
     {
         float t = (float)i / steps;
@@ -317,13 +323,16 @@ void animate_window_open(const Window &targetWin)
         prev_y = y;
         prev_w = w;
         prev_h = h;
+        delay(10);
     }
+    tft.endWrite();
 }
 
 void animate_window_close(const Window &targetWin)
 {
-    int steps = 8;
+    int steps = 12;
     int prev_x = -1, prev_y = -1, prev_w = -1, prev_h = -1;
+    tft.startWrite();
     for (int i = steps; i >= 1; --i)
     {
         float t = (float)i / steps;
@@ -341,8 +350,10 @@ void animate_window_close(const Window &targetWin)
         prev_y = y;
         prev_w = w;
         prev_h = h;
+        delay(10);
     }
     tft.fillRoundRect(prev_x, prev_y, prev_w, prev_h, 12, tft.color565(10, 8, 24));
+    tft.endWrite();
     draw_desktop();
 }
 
@@ -366,14 +377,37 @@ void draw_window(const Window &win)
 
     tft.setTextColor(tft.color565(0, 255, 255));
     tft.setTextSize(2);
-    tft.setCursor(win.x + 80, bar_y + 8);
-    tft.print(win.title);
-
+    int title_w = tft.textWidth(win.title);
     char sizeinfo[32];
     snprintf(sizeinfo, sizeof(sizeinfo), "%dx%d", win.w, win.h);
     int sizeinfo_w = tft.textWidth(sizeinfo);
+    int bar_padding = 16;
+    int min_gap = 24;
+    int title_x = win.x + 80;
+    int sizeinfo_x = win.x + win.w - sizeinfo_w - bar_padding;
+    if (title_x + title_w + min_gap > sizeinfo_x)
+    {
+        char title_buf[32];
+        strncpy(title_buf, win.title, sizeof(title_buf) - 1);
+        title_buf[sizeof(title_buf) - 1] = 0;
+        int max_title_w = sizeinfo_x - title_x - min_gap;
+        int len = strlen(title_buf);
+        while (len > 3 && tft.textWidth(title_buf) > max_title_w)
+        {
+            title_buf[--len] = 0;
+        }
+        if (len > 3)
+            strcat(title_buf, "...");
+        tft.setCursor(title_x, bar_y + 8);
+        tft.print(title_buf);
+    }
+    else
+    {
+        tft.setCursor(title_x, bar_y + 8);
+        tft.print(win.title);
+    }
     tft.setTextColor(tft.color565(180, 255, 180));
-    tft.setCursor(win.x + win.w - sizeinfo_w - 40, bar_y + 8);
+    tft.setCursor(sizeinfo_x, bar_y + 8);
     tft.print(sizeinfo);
     tft.setTextSize(2);
 }
@@ -386,6 +420,14 @@ void draw_terminal_content(bool cursor)
     tft.setTextSize(2);
     tft.setCursor(win_x + 16, win_y + 48);
     tft.print("> ");
+    int cursor_x = win_x + 16 + tft.textWidth("> ");
+    int cursor_y = win_y + 48;
+    tft.setTextSize(2);
+    int cursor_w = tft.textWidth("_");
+    int cursor_h = 16;
+    tft.fillRect(cursor_x, cursor_y, cursor_w, cursor_h, tft.color565(20, 20, 30));
+    tft.setCursor(cursor_x, cursor_y);
+    tft.setTextColor(tft.color565(0, 255, 0));
     if (cursor)
     {
         tft.print("_");
@@ -482,6 +524,14 @@ void run_benchmark_tests()
         DummyObj() : a(0), b(0), c(0), d(0) {}
     };
 
+    int margin_x = 30;
+    int margin_y = 30;
+    Window benchWin = {margin_x, margin_y, tft.width() - 2 * margin_x, tft.height() - 2 * margin_y, "Benchmark", true};
+    draw_window(benchWin);
+    int x = benchWin.x + 20;
+    int y = benchWin.y + 48;
+    tft.fillRect(x, y + 64, benchWin.w - 40, benchWin.h - 60 - 64, tft.color565(20, 20, 30));
+
     while ((t_now = millis()) < t_end)
     {
         strcpy(bench_current_test, "Integer math");
@@ -534,7 +584,17 @@ void run_benchmark_tests()
             if (bench_seconds_left < 0)
                 bench_seconds_left = 0;
             bench_last_draw = millis();
-            draw_desktop();
+            int update_h = 64;
+            tft.fillRect(x, y, benchWin.w - 40, update_h, tft.color565(20, 20, 30));
+            char countdown[32];
+            snprintf(countdown, sizeof(countdown), "Time left: %ds", bench_seconds_left);
+            tft.setTextColor(tft.color565(255, 255, 0));
+            tft.setCursor(x, y);
+            tft.print(countdown);
+            tft.setCursor(x, y + 32);
+            tft.setTextColor(tft.color565(180, 255, 255));
+            tft.print("Test: ");
+            tft.print(bench_current_test);
         }
         delay(1);
     }
@@ -558,7 +618,6 @@ void run_benchmark_tests()
     bench_seconds_left = 0;
 }
 
-void draw_benchmark_content(const Window &win);
 void draw_activity_monitor_content(const Window &win)
 {
     int x = win.x + 20;
@@ -570,7 +629,6 @@ void draw_activity_monitor_content(const Window &win)
     tft.print("System Usage:");
     y += line_h;
 
-    // CPU (simulated as always 100% on microcontroller)
     tft.setTextColor(tft.color565(255, 255, 0));
     tft.setCursor(x, y);
     tft.print("CPU: ");
@@ -579,7 +637,6 @@ void draw_activity_monitor_content(const Window &win)
     tft.print(" (ESP32)");
     y += line_h;
 
-    // RAM
     tft.setTextColor(tft.color565(0, 255, 0));
     tft.setCursor(x, y);
     uint32_t heap = ESP.getFreeHeap();
@@ -588,14 +645,12 @@ void draw_activity_monitor_content(const Window &win)
     tft.print(" KB free");
     y += line_h;
 
-    // EEPROM (simulated, as not used in this code)
     tft.setTextColor(tft.color565(0, 200, 255));
     tft.setCursor(x, y);
     tft.print("EEPROM: ");
     tft.print("N/A");
     y += line_h;
 
-    // Running tasks (open apps)
     tft.setTextColor(tft.color565(255, 180, 180));
     tft.setCursor(x, y);
     tft.print("Running Apps:");
@@ -664,7 +719,8 @@ void draw_benchmark_content(const Window &win)
     {
         if (bench_seconds_left != last_seconds_left || strcmp(bench_current_test, last_test) != 0)
         {
-            tft.fillRect(x, y, win.w - 40, 64, tft.color565(20, 20, 30));
+            int update_h = 64;
+            tft.fillRect(x, y, win.w - 40, update_h, tft.color565(20, 20, 30));
             char countdown[32];
             snprintf(countdown, sizeof(countdown), "Time left: %ds", bench_seconds_left);
             tft.setTextColor(tft.color565(255, 255, 0));
@@ -690,63 +746,82 @@ void draw_benchmark_content(const Window &win)
     }
 }
 
-void draw_desktop()
+void draw_desktop(bool partial)
 {
-    draw_wallpaper();
-    draw_top_bar();
-
+    tft.startWrite();
     int margin = 32;
     int icon_y = margin + 16;
     int icon_w = 48;
     int icon_gap = 16;
-
     int icon_x[5] = {margin, margin + icon_w + icon_gap, margin + 2 * (icon_w + icon_gap), margin + 3 * (icon_w + icon_gap), margin + 4 * (icon_w + icon_gap)};
 
-    if (focus_state == FOCUS_DESKTOP)
+    if (!partial)
     {
-        for (int i = 0; i < desktop_app_count; ++i)
-            draw_icon(icon_x[i], icon_y, desktop_selected == i, i);
-    }
-    else
-    {
-        for (int i = 0; i < desktop_app_count; ++i)
-            draw_icon(icon_x[i], icon_y, false, i);
-    }
-    if (app_open[APP_ACTIVITY_MONITOR])
-    {
-        Window actWin = {80, 60, tft.width() - 160, tft.height() - 120, "Activity Monitor", true};
-        draw_window(actWin);
-        draw_activity_monitor_content(actWin);
+        draw_wallpaper();
+        wallpaper_drawn = true;
+        draw_top_bar();
     }
 
-    if (app_open[APP_TERMINAL])
+    int icons_area_x = margin - 8;
+    int icons_area_y = icon_y - 8;
+    int icons_area_w = 5 * (icon_w + icon_gap) - icon_gap + 16;
+    int icons_area_h = icon_w + 32;
+    if (partial)
     {
-        Window termWin = {20, 30, tft.width() - 40, tft.height() - 40, "Terminal", true};
-        draw_window(termWin);
-        draw_terminal_content(cursor_visible);
+        tft.fillRect(icons_area_x, icons_area_y, icons_area_w, icons_area_h, tft.color565(10, 8, 24));
     }
-    if (app_open[APP_FILES])
+
+    if (focus_state != FOCUS_DESKTOP)
     {
-        Window filesWin = {40, 50, tft.width() - 80, tft.height() - 80, "Files", true};
-        draw_window(filesWin);
+        tab_count = 0;
     }
-    if (app_open[APP_BENCHMARK])
+
+    for (int i = 0; i < desktop_app_count; ++i)
     {
-        int margin_x = 30;
-        int margin_y = 30;
-        Window benchWin = {margin_x, margin_y, tft.width() - 2 * margin_x, tft.height() - 2 * margin_y, "Benchmark", true};
-        draw_window(benchWin);
-        draw_benchmark_content(benchWin);
+        bool selected = (focus_state == FOCUS_DESKTOP && desktop_selected == i && tab_count > 0);
+        draw_icon(icon_x[i], icon_y, selected, i);
     }
-    if (app_open[APP_SETTINGS])
+
+    if (!partial)
     {
-        Window settingsWin = {60, 70, tft.width() - 120, tft.height() - 120, "Settings", true};
-        draw_window(settingsWin);
-        tft.setTextColor(tft.color565(180, 255, 255));
-        tft.setTextSize(2);
-        tft.setCursor(settingsWin.x + 32, settingsWin.y + 60);
-        tft.print("Settings coming soon...");
+        if (app_open[APP_ACTIVITY_MONITOR])
+        {
+            int margin_x = 40;
+            int margin_y = 30;
+            Window actWin = {margin_x, margin_y, tft.width() - 2 * margin_x, tft.height() - 2 * margin_y, "Activity Monitor", true};
+            draw_window(actWin);
+            draw_activity_monitor_content(actWin);
+        }
+        if (app_open[APP_TERMINAL])
+        {
+            Window termWin = {20, 30, tft.width() - 40, tft.height() - 40, "Terminal", true};
+            draw_window(termWin);
+            draw_terminal_content(cursor_visible);
+        }
+        if (app_open[APP_FILES])
+        {
+            Window filesWin = {40, 50, tft.width() - 80, tft.height() - 80, "Files", true};
+            draw_window(filesWin);
+        }
+        if (app_open[APP_BENCHMARK])
+        {
+            int margin_x = 30;
+            int margin_y = 30;
+            Window benchWin = {margin_x, margin_y, tft.width() - 2 * margin_x, tft.height() - 2 * margin_y, "Benchmark", true};
+            draw_window(benchWin);
+            draw_benchmark_content(benchWin);
+        }
+        if (app_open[APP_SETTINGS])
+        {
+            Window settingsWin = {60, 70, tft.width() - 120, tft.height() - 120, "Settings", true};
+            draw_window(settingsWin);
+            tft.setTextColor(tft.color565(180, 255, 255));
+            tft.setTextSize(2);
+            tft.setCursor(settingsWin.x + 32, settingsWin.y + 60);
+            tft.print("Settings coming soon...");
+        }
     }
+    tft.endWrite();
 }
 
 void desktop_process()
@@ -827,7 +902,7 @@ void handle_serial_command(const char *cmd)
     }
     else if (strcmp(cmd, "close") == 0)
     {
-        // Animate closing for each open app
+        tft.startWrite();
         if (app_open[APP_TERMINAL])
         {
             Window termWin = {20, 30, tft.width() - 40, tft.height() - 40, "Terminal", true};
@@ -855,9 +930,12 @@ void handle_serial_command(const char *cmd)
             Window actWin = {80, 60, tft.width() - 160, tft.height() - 120, "Activity Monitor", true};
             animate_window_close(actWin);
         }
+        tft.endWrite();
         for (int i = 0; i < APP_COUNT; ++i)
             app_open[i] = false;
         focus_state = FOCUS_DESKTOP;
+        tab_count = 1;
+        needs_redraw = true;
         draw_desktop();
         Serial.println("[DESKTOP] All apps closed");
     }
@@ -868,7 +946,7 @@ void handle_serial_command(const char *cmd)
             if (tab_count == 0)
             {
                 tab_count = 1;
-                draw_desktop();
+                draw_desktop(true);
                 Serial.print("[DESKTOP] Selected: ");
                 if (desktop_selected == APP_TERMINAL)
                     Serial.println("Terminal");
@@ -878,7 +956,7 @@ void handle_serial_command(const char *cmd)
             else
             {
                 desktop_selected = (desktop_selected + 1) % desktop_app_count;
-                draw_desktop();
+                draw_desktop(true);
                 Serial.print("[DESKTOP] Selected: ");
                 if (desktop_selected == APP_TERMINAL)
                     Serial.println("Terminal");
@@ -917,6 +995,7 @@ void handle_serial_command(const char *cmd)
         else if (focus_state == FOCUS_WINDOW)
         {
             focus_state = FOCUS_DESKTOP;
+            tab_count = 1;
             draw_desktop();
             Serial.println("[DESKTOP] Desktop focused");
         }
@@ -960,38 +1039,42 @@ void setup()
 
 void loop()
 {
-    if (ui_state == UI_LOGIN)
+    if (millis() - last_frame > FRAME_DELAY)
     {
-        if (millis() - login_start_time > 1500)
+        last_frame = millis();
+        if (ui_state == UI_LOGIN)
         {
-            draw_desktop();
-            ui_state = UI_DESKTOP;
-        }
-    }
-    else if (ui_state == UI_DESKTOP)
-    {
-        while (Serial.available())
-        {
-            char c = Serial.read();
-            if (c == '\n' || c == '\r')
+            if (millis() - login_start_time > 1500 && needs_redraw)
             {
-                serial_cmd_buf[serial_cmd_pos] = 0;
-                handle_serial_command(serial_cmd_buf);
-                serial_cmd_pos = 0;
-            }
-            else if (serial_cmd_pos < (int)sizeof(serial_cmd_buf) - 1)
-            {
-                serial_cmd_buf[serial_cmd_pos++] = c;
+                draw_desktop();
+                ui_state = UI_DESKTOP;
+                needs_redraw = false;
             }
         }
-        if (app_open[APP_TERMINAL])
+        else if (ui_state == UI_DESKTOP)
         {
-            if (millis() - last_cursor_toggle > 500)
+            while (Serial.available())
             {
-                erase_terminal_cursor();
-                cursor_visible = !cursor_visible;
-                last_cursor_toggle = millis();
-                draw_terminal_content(cursor_visible);
+                char c = Serial.read();
+                if (c == '\n' || c == '\r')
+                {
+                    serial_cmd_buf[serial_cmd_pos] = 0;
+                    handle_serial_command(serial_cmd_buf);
+                    serial_cmd_pos = 0;
+                }
+                else if (serial_cmd_pos < (int)sizeof(serial_cmd_buf) - 1)
+                {
+                    serial_cmd_buf[serial_cmd_pos++] = c;
+                }
+            }
+            if (app_open[APP_TERMINAL])
+            {
+                if (millis() - last_cursor_toggle > 500)
+                {
+                    draw_terminal_content(cursor_visible);
+                    cursor_visible = !cursor_visible;
+                    last_cursor_toggle = millis();
+                }
             }
         }
     }
